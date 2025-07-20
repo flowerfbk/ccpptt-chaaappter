@@ -71,11 +71,10 @@ func (api *api) Models() (result []model.Model) {
 
 func (api *api) ToolChoice(ctx *gin.Context) (ok bool, err error) {
 	var (
-		proxied    = api.env.GetString("server.proxied")
 		completion = common.GetGinCompletion(ctx)
 	)
 
-	if toolChoice(ctx, api.env, proxied, completion) {
+	if toolChoice(ctx, completion) {
 		ok = true
 	}
 	return

@@ -9,7 +9,6 @@ import (
 	"chatgpt-adapter/core/gin/response"
 	"chatgpt-adapter/core/logger"
 	"encoding/json"
-	"errors"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
@@ -20,23 +19,45 @@ import (
 
 const ginTokens = "__tokens__"
 
-func waitMessage(chatResponse chan string, cancel func(str string) bool) (content string, err error) {
+func waitMessage(r *http.Response, cancel func(str string) bool) (content string, err error) {
+
+	defer r.Body.Close()
+	reader := bufio.NewReader(r.Body)
+	var chunk []byte
 
 	for {
-		message, ok := <-chatResponse
-		if !ok {
+		chunk, _, err = reader.ReadLine()
+		if err == io.EOF {
 			break
 		}
 
-		if strings.HasPrefix(message, "error: ") {
-			return "", errors.New(strings.TrimPrefix(message, "error: "))
+		raw := ""
+		if bytes.HasPrefix(chunk, []byte("a0:")) {
+			err = json.Unmarshal(chunk[3:], &raw)
+			if err != nil {
+				logger.Error(err)
+				return
+			}
 		}
 
-		message = strings.TrimPrefix(message, "text: ")
+		if bytes.HasPrefix(chunk, []byte("ad:")) {
+			var obj map[string]interface{}
+			err = json.Unmarshal(chunk[3:], &obj)
+			if err != nil {
+				logger.Error(err)
+				return
+			}
+
+			finishReason, ok := obj["finishReason"]
+			if ok && finishReason == "stop" {
+				break
+			}
+		}
+
 		logger.Debug("----- raw -----")
-		logger.Debug(message)
-		if len(message) > 0 {
-			content += message
+		logger.Debug(raw)
+		if len(raw) > 0 {
+			content += raw
 			if cancel != nil && cancel(content) {
 				return content, nil
 			}
@@ -137,13 +158,11 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 
 func mergeMessages(ctx *gin.Context, completion model.Completion) (newMessages string, err error) {
 	var (
-		messages    = completion.Messages
-		specialized = ctx.GetBool("specialized")
-		isC         = response.IsClaude(ctx, completion.Model)
+		messages = completion.Messages
 	)
 
 	messageL := len(messages)
-	if specialized && isC && messageL == 1 {
+	if messageL == 1 {
 		newMessages = messages[0].GetString("content")
 		return
 	}
