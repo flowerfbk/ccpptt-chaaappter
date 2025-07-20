@@ -17,6 +17,7 @@ import (
 	"chatgpt-adapter/relay/llm/deepseek"
 	"chatgpt-adapter/relay/llm/grok"
 	"chatgpt-adapter/relay/llm/lmsys"
+	"chatgpt-adapter/relay/llm/lmsys-chat"
 	"chatgpt-adapter/relay/llm/qodo"
 	"chatgpt-adapter/relay/llm/v1"
 	"chatgpt-adapter/relay/llm/windsurf"
@@ -66,6 +67,11 @@ func Injects(container *sdk.Container) (err error) {
 	}
 
 	err = lmsys.Injects(container)
+	if err != nil {
+		return
+	}
+
+	err = lmsys_chat.Injects(container)
 	if err != nil {
 		return
 	}

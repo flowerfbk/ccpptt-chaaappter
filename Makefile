@@ -1,7 +1,7 @@
 TARGET_EXEC := server
 ENV := CGO_ENABLED=0
 
-AT := ""
+AT := 
 
 ifeq ($(OS),Windows_NT)
 	ENV := SET ${ENV}
