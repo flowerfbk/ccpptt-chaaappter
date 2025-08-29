@@ -3,14 +3,15 @@ package lmsys_chat
 import (
 	"chatgpt-adapter/core/common"
 	"context"
-	"github.com/bincooo/emit.io"
-	"github.com/google/uuid"
 	"net/http"
 	"sync"
+
+	"github.com/bincooo/emit.io"
+	"github.com/google/uuid"
 )
 
 const (
-	baseUrl = "https://lmarena.ai"
+	baseUrl = "https://lmarena.ai/nextjs-api"
 )
 
 var (
@@ -99,7 +100,7 @@ func fetch(ctx context.Context, cookie string, messages, modelId string) (respon
 		Header("Cookie", cookie).
 		Ja3().
 		JSONHeader().
-		POST(baseUrl+"/api/stream/create-evaluation").
+		POST(baseUrl+"/stream/create-evaluation").
 		Body(req).
 		DoC(emit.Status(http.StatusOK), emit.IsSTREAM)
 	return
