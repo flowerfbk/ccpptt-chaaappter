@@ -42,8 +42,10 @@ func (api *api) Match(ctx *gin.Context, model string) (ok bool, err error) {
 			continue
 		}
 
+		// 如果设置了密码，检查token是否匹配
+		// 注意：现在token可以为空（使用自动获取的cookie）
 		password := api.env.GetString("server.password")
-		if password != "" && password != token {
+		if password != "" && token != "" && password != token {
 			err = response.UnauthorizedError
 			return
 		}
@@ -92,7 +94,12 @@ func (api *api) Completion(ctx *gin.Context) (err error) {
 		return
 	}
 	ctx.Set(ginTokens, response.CalcTokens(newMessages))
-	resp, err := fetch(ctx.Request.Context(), ctx.GetString("token"), newMessages, GetModelId(completion.Model))
+	
+	// 获取用户传递的cookie（如果有的话）
+	// 如果没有传递cookie，fetch函数会自动获取
+	cookie := ctx.GetString("token")
+	
+	resp, err := fetch(ctx.Request.Context(), cookie, newMessages, GetModelId(completion.Model))
 	if err != nil {
 		logger.Error(err)
 		return
