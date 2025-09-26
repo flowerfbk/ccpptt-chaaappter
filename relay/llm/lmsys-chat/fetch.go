@@ -94,6 +94,12 @@ func getValidCookie(ctx context.Context) (string, error) {
 	if autoCookie != "" && time.Now().Before(cookieExpireAt) {
 		cookie := autoCookie
 		cookieMutex.RUnlock()
+		// 打印自动cookie的前30个字符
+		if len(cookie) > 30 {
+			logger.Infof("自动cookie: %s...", cookie[:30])
+		} else {
+			logger.Infof("自动cookie: %s", cookie)
+		}
 		return cookie, nil
 	}
 	cookieMutex.RUnlock()
@@ -123,6 +129,8 @@ func refreshCookie(ctx context.Context) (string, error) {
 		baseUrl = "http://127.0.0.1:" + env.Env.GetString("browser-less.port")
 	}
 	
+	logger.Infof("browser-less URL: %s", baseUrl)
+	
 	// 调用 browser-less 获取 cookie
 	r, err := emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
@@ -132,7 +140,7 @@ func refreshCookie(ctx context.Context) (string, error) {
 		DoC(emit.Status(http.StatusOK), emit.IsJSON)
 	if err != nil {
 		logger.Error("browser-less 获取 cookie 失败:", err)
-		if emit.IsJSON(r) == nil {
+		if r != nil && emit.IsJSON(r) == nil {
 			logger.Error(emit.TextResponse(r))
 		}
 		return "", err
@@ -145,24 +153,57 @@ func refreshCookie(ctx context.Context) (string, error) {
 		return "", err
 	}
 	
-	data := obj["data"].(map[string]interface{})
-	autoCookie = data["cookie"].(string)
-	userAgent = data["userAgent"].(string)
-	lang = data["lang"].(string)
+	logger.Infof("browser-less 响应: %+v", obj)
+	
+	data, ok := obj["data"].(map[string]interface{})
+	if !ok {
+		logger.Error("browser-less 响应格式错误，没有 data 字段")
+		return "", errors.New("browser-less 响应格式错误")
+	}
+	
+	cookie, ok := data["cookie"].(string)
+	if !ok || cookie == "" {
+		logger.Error("browser-less 响应中没有 cookie")
+		return "", errors.New("browser-less 响应中没有 cookie")
+	}
+	
+	autoCookie = cookie
+	
+	// 更新 userAgent 和 lang（如果有的话）
+	if ua, ok := data["userAgent"].(string); ok && ua != "" {
+		userAgent = ua
+	}
+	if l, ok := data["lang"].(string); ok && l != "" {
+		lang = l
+	}
 	
 	// 设置cookie过期时间（30分钟）
 	cookieExpireAt = time.Now().Add(30 * time.Minute)
 	
-	logger.Info("成功获取 lmarena.ai cookie")
+	// 打印获取到的cookie前30个字符
+	if len(autoCookie) > 30 {
+		logger.Infof("成功获取 lmarena.ai cookie，自动cookie: %s...", autoCookie[:30])
+	} else {
+		logger.Infof("成功获取 lmarena.ai cookie，自动cookie: %s", autoCookie)
+	}
+	
 	return autoCookie, nil
 }
 
 func fetch(ctx context.Context, cookie string, messages, modelId string) (response *http.Response, err error) {
 	// 如果没有传入cookie，自动获取
 	if cookie == "" {
+		logger.Info("没有传入cookie，尝试自动获取...")
 		cookie, err = getValidCookie(ctx)
 		if err != nil {
 			return nil, err
+		}
+	} else {
+		// 打印传入的cookie前30个字符
+		if len(cookie) > 30 {
+			logger.Infof("使用传入的cookie: %s...", cookie[:30])
+		} else {
+			logger.Infof("使用传入的cookie: %s", cookie)
 		}
 	}
 	
@@ -174,10 +215,12 @@ func fetch(ctx context.Context, cookie string, messages, modelId string) (respon
 	
 	if exists {
 		// 使用重试接口
+		logger.Infof("使用已有会话重试，sessionId: %s", session.SessionId)
 		return fetchRetry(ctx, cookie, messages, modelId, session)
 	}
 	
 	// 第一次，使用创建接口
+	logger.Info("创建新会话...")
 	return fetchCreate(ctx, cookie, messages, modelId, cacheKey)
 }
 
@@ -234,13 +277,16 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 		Modality: "chat",
 	}
 
+	logger.Infof("创建会话请求，URL: %s", baseUrl+"/stream/create-evaluation")
+	
 	response, err = emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
 		Header("User-Agent", userAgent).
 		Header("Accept-Language", lang).
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
-		Header("Origin", baseUrl).
+		Header("Origin", "https://lmarena.ai").
+		Header("Referer", "https://lmarena.ai/").
 		Header("Cookie", cookie).
 		Ja3().
 		JSONHeader().
@@ -250,6 +296,7 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 	
 	// 如果遇到403错误，刷新cookie重试
 	if err != nil {
+		logger.Errorf("创建会话失败: %v", err)
 		var busErr emit.Error
 		if errors.As(err, &busErr) && busErr.Code == 403 {
 			logger.Info("遇到403错误，尝试刷新cookie...")
@@ -288,13 +335,16 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 	url := fmt.Sprintf("%s/stream/retry-evaluation-session-message/%s/messages/%s", 
 		baseUrl, session.SessionId, session.ModelMessageId)
 	
+	logger.Infof("重试会话请求，URL: %s", url)
+	
 	response, err = emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
 		Header("User-Agent", userAgent).
 		Header("Accept-Language", lang).
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
-		Header("Origin", baseUrl).
+		Header("Origin", "https://lmarena.ai").
+		Header("Referer", "https://lmarena.ai/").
 		Header("Cookie", cookie).
 		Ja3().
 		JSONHeader().
@@ -304,6 +354,7 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 	
 	// 如果遇到403错误，刷新cookie重试
 	if err != nil {
+		logger.Errorf("重试会话失败: %v", err)
 		var busErr emit.Error
 		if errors.As(err, &busErr) && busErr.Code == 403 {
 			logger.Info("遇到403错误，尝试刷新cookie...")
