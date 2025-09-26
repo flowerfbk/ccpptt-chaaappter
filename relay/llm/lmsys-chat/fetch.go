@@ -2,7 +2,9 @@ package lmsys_chat
 
 import (
 	"chatgpt-adapter/core/common"
+	"chatgpt-adapter/core/logger"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/bincooo/emit.io"
 	"github.com/google/uuid"
+	"github.com/iocgo/sdk/env"
 )
 
 const (
@@ -28,6 +31,11 @@ var (
 	// 会话缓存
 	sessionCache = make(map[string]*SessionCache)
 	cacheMutex   sync.RWMutex
+	
+	// 自动获取的cookie缓存
+	autoCookie     string
+	cookieMutex    sync.RWMutex
+	cookieExpireAt time.Time
 )
 
 // 会话缓存结构
@@ -80,7 +88,84 @@ func getCacheKey(cookie string, modelId string) string {
 	return authPart + "_" + modelId
 }
 
+// 获取有效的cookie
+func getValidCookie(ctx context.Context) (string, error) {
+	cookieMutex.RLock()
+	if autoCookie != "" && time.Now().Before(cookieExpireAt) {
+		cookie := autoCookie
+		cookieMutex.RUnlock()
+		return cookie, nil
+	}
+	cookieMutex.RUnlock()
+	
+	// 需要获取新的cookie
+	return refreshCookie(ctx)
+}
+
+// 刷新cookie
+func refreshCookie(ctx context.Context) (string, error) {
+	cookieMutex.Lock()
+	defer cookieMutex.Unlock()
+	
+	// 双重检查
+	if autoCookie != "" && time.Now().Before(cookieExpireAt) {
+		return autoCookie, nil
+	}
+	
+	logger.Info("正在通过 browser-less 获取 lmarena.ai cookie...")
+	
+	baseUrl := env.Env.GetString("browser-less.reversal")
+	if !env.Env.GetBool("browser-less.enabled") && baseUrl == "" {
+		return "", errors.New("需要启用 browser-less 来自动获取 cookie，请设置 `browser-less.enabled` 或 `browser-less.reversal`")
+	}
+	
+	if baseUrl == "" {
+		baseUrl = "http://127.0.0.1:" + env.Env.GetString("browser-less.port")
+	}
+	
+	// 调用 browser-less 获取 cookie
+	r, err := emit.ClientBuilder(common.HTTPClient).
+		Context(ctx).
+		GET(baseUrl+"/v0/clearance").
+		Header("x-website", "https://lmarena.ai").
+		Header("x-mode", "anonymous"). // 使用匿名模式
+		DoC(emit.Status(http.StatusOK), emit.IsJSON)
+	if err != nil {
+		logger.Error("browser-less 获取 cookie 失败:", err)
+		if emit.IsJSON(r) == nil {
+			logger.Error(emit.TextResponse(r))
+		}
+		return "", err
+	}
+	
+	defer r.Body.Close()
+	obj, err := emit.ToMap(r)
+	if err != nil {
+		logger.Error("解析 browser-less 响应失败:", err)
+		return "", err
+	}
+	
+	data := obj["data"].(map[string]interface{})
+	autoCookie = data["cookie"].(string)
+	userAgent = data["userAgent"].(string)
+	lang = data["lang"].(string)
+	
+	// 设置cookie过期时间（30分钟）
+	cookieExpireAt = time.Now().Add(30 * time.Minute)
+	
+	logger.Info("成功获取 lmarena.ai cookie")
+	return autoCookie, nil
+}
+
 func fetch(ctx context.Context, cookie string, messages, modelId string) (response *http.Response, err error) {
+	// 如果没有传入cookie，自动获取
+	if cookie == "" {
+		cookie, err = getValidCookie(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	
 	cacheKey := getCacheKey(cookie, modelId)
 	
 	cacheMutex.RLock()
@@ -152,7 +237,7 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 	response, err = emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
 		Header("User-Agent", userAgent).
-		Header("Accept-Language", "en-US,en;q=0.5").
+		Header("Accept-Language", lang).
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
 		Header("Origin", baseUrl).
@@ -162,6 +247,19 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 		POST(baseUrl+"/stream/create-evaluation").
 		Body(req).
 		DoC(emit.Status(http.StatusOK), emit.IsSTREAM)
+	
+	// 如果遇到403错误，刷新cookie重试
+	if err != nil {
+		var busErr emit.Error
+		if errors.As(err, &busErr) && busErr.Code == 403 {
+			logger.Info("遇到403错误，尝试刷新cookie...")
+			newCookie, refreshErr := refreshCookie(ctx)
+			if refreshErr == nil {
+				return fetchCreate(ctx, newCookie, messages, modelId, cacheKey)
+			}
+		}
+	}
+	
 	return
 }
 
@@ -193,7 +291,7 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 	response, err = emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
 		Header("User-Agent", userAgent).
-		Header("Accept-Language", "en-US,en;q=0.5").
+		Header("Accept-Language", lang).
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
 		Header("Origin", baseUrl).
@@ -203,6 +301,18 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 		PUT(url).
 		Body(retryReq).
 		DoC(emit.Status(http.StatusOK), emit.IsSTREAM)
+	
+	// 如果遇到403错误，刷新cookie重试
+	if err != nil {
+		var busErr emit.Error
+		if errors.As(err, &busErr) && busErr.Code == 403 {
+			logger.Info("遇到403错误，尝试刷新cookie...")
+			newCookie, refreshErr := refreshCookie(ctx)
+			if refreshErr == nil {
+				return fetchRetry(ctx, newCookie, messages, modelId, session)
+			}
+		}
+	}
 	
 	return
 }
