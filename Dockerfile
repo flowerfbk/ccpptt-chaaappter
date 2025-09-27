@@ -1,7 +1,9 @@
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-RUN apk add git make && git clone https://github.com/flowerfbk/ccpptt-chaaappter.git .
+# 添加时间戳强制破坏缓存，确保每次都重新拉取最新代码
+RUN echo "Build time: $(date +%s)" > /tmp/build-time.txt
+RUN apk add git make && git clone --depth 1 https://github.com/flowerfbk/ccpptt-chaaappter.git .
 RUN make install
 RUN make build-linux
 
