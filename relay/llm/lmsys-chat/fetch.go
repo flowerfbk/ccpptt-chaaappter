@@ -192,6 +192,7 @@ func refreshCookie(ctx context.Context) (string, error) {
 
 func fetch(ctx context.Context, cookie string, messages, modelId string) (response *http.Response, err error) {
 	// 如果没有传入cookie，或者传入的是 EMPTY_KEY 或空格，自动获取
+	logger.Infof("AAAAA 传入的cookie: %s", cookie)
 	if cookie == "" || cookie == "EMPTY_KEY" || cookie == " " || cookie == "  " || cookie == "   " {
 		if cookie == "EMPTY_KEY" {
 			logger.Info("检测到 EMPTY_KEY，按照未传入cookie处理...")
