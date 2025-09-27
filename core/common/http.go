@@ -31,7 +31,7 @@ func init() {
 		options := GetIdleConnectOptions(env)
 		connTimeout := env.GetInt("server-conn.connTimeout")
 		if connTimeout == 0 {
-			connTimeout = 180
+			connTimeout = 3600
 		}
 
 		options = append(options, emit.Ja3Helper(emit.Echo{RandomTLSExtension: true, HelloID: profiles.Chrome_133}, connTimeout))
