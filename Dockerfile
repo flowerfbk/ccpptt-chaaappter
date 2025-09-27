@@ -1,9 +1,9 @@
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-# 添加时间戳强制破坏缓存，确保每次都重新拉取最新代码
-RUN echo "Build time: $(date +%s)" > /tmp/build-time.txt
-RUN apk add git make && git clone --depth 1 https://github.com/flowerfbk/ccpptt-chaaappter.git .
+# 直接复制本地代码，不使用 git clone
+COPY . .
+RUN apk add make
 RUN make install
 RUN make build-linux
 
@@ -19,13 +19,13 @@ RUN apt update \
 RUN curl -JLO https://raw.githubusercontent.com/bincooo/chatgpt-adapter/refs/heads/hel/bin.zip
 RUN echo -e 'server:\n  port: 8080\n\nbrowser-less:\n  enabled: true\n  port: 9000\n  disabled-gpu: true\n  headless: true' > ./config.yaml
 
-# Install google
+# Install google chrome
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
   && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
   && apt-get update \
   && apt-get install -y google-chrome-stable
 
-# Install Edge
+# Install Edge (可选，已注释)
 #RUN wget -q -O - https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor | tee /etc/apt/trusted.gpg.d/microsoft.gpg >/dev/null \
 #    && echo "deb https://packages.microsoft.com/repos/edge stable main" >> /etc/apt/sources.list.d/microsoft-edge.list \
 #    && apt-get update -qqy \
