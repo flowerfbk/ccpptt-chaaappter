@@ -132,10 +132,11 @@ func refreshCookie(ctx context.Context) (string, error) {
 	logger.Infof("browser-less URL: %s", baseUrl)
 	
 	// 调用 browser-less 获取 cookie
+	// 访问 ?mode=direct 页面以触发生成匿名用户 token
 	r, err := emit.ClientBuilder(common.HTTPClient).
 		Context(ctx).
 		GET(baseUrl+"/v0/clearance").
-		Header("x-website", "https://lmarena.ai").
+		Header("x-website", "https://lmarena.ai/?mode=direct").
 		DoC(emit.Status(http.StatusOK), emit.IsJSON)
 	if err != nil {
 		logger.Error("browser-less 获取 cookie 失败:", err)
@@ -292,10 +293,10 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
 		Header("Origin", "https://lmarena.ai").
-		Header("Referer", "https://lmarena.ai/").
+		Header("Referer", "https://lmarena.ai/?mode=direct").
 		Header("Cookie", cookie).
+		Header("Content-Type", "text/plain;charset=UTF-8").
 		Ja3().
-		JSONHeader().
 		POST(baseUrl+"/stream/create-evaluation").
 		Body(req).
 		DoC(emit.Status(http.StatusOK), emit.IsSTREAM)
@@ -350,10 +351,10 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 		Header("Cache-Control", "no-cache").
 		Header("Accept-Encoding", "gzip, deflate, br, zstd").
 		Header("Origin", "https://lmarena.ai").
-		Header("Referer", "https://lmarena.ai/").
+		Header("Referer", "https://lmarena.ai/?mode=direct").
 		Header("Cookie", cookie).
+		Header("Content-Type", "text/plain;charset=UTF-8").
 		Ja3().
-		JSONHeader().
 		PUT(url).
 		Body(retryReq).
 		DoC(emit.Status(http.StatusOK), emit.IsSTREAM)
