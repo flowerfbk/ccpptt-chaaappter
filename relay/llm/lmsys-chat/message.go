@@ -9,7 +9,6 @@ import (
 	"chatgpt-adapter/core/gin/response"
 	"chatgpt-adapter/core/logger"
 	"encoding/json"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
@@ -73,10 +72,6 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 	logger.Infof("waitResponse ...")
 	tokens := ctx.GetInt(ginTokens)
 	reasoningContent := ""
-	
-	// 添加超时控制
-	startTime := time.Now()
-	maxDuration := 10 * time.Minute // 最长等待10分钟
 
 	onceExec := sync.OnceFunc(func() {
 		if !sse {
@@ -93,23 +88,14 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 	var chunk []byte
 
 	for {
-		// 检查是否超时
-		if time.Since(startTime) > maxDuration {
-			logger.Warn("等待响应超时，强制结束")
-			break
-		}
-		
 		chunk, _, err = reader.ReadLine()
 		if err == io.EOF {
-			logger.Debug("读取到 EOF，继续等待...")
-			// 不要 break，继续等待
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		if err != nil {
-			logger.Debugf("读取错误: %v，继续等待...", err)
-			time.Sleep(100 * time.Millisecond)
-			continue
+			raw := response.ExecMatchers(matchers, "", true)
+			if raw != "" && sse {
+				response.SSEResponse(ctx, Model, raw, created)
+			}
+			content += raw
+			break
 		}
 
 		logger.Debug("----- raw -----")
@@ -122,8 +108,8 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 		if bytes.HasPrefix(chunk, []byte("a0:")) {
 			err = json.Unmarshal(chunk[3:], &raw)
 			if err != nil {
-				logger.Errorf("解析 a0 数据失败: %v, 原始数据: %s", err, string(chunk))
-				continue // 改为 continue，不要 return
+				logger.Error(err)
+				return
 			}
 		}
 
@@ -131,20 +117,14 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 			var obj map[string]interface{}
 			err = json.Unmarshal(chunk[3:], &obj)
 			if err != nil {
-				logger.Errorf("解析 ad 数据失败: %v, 原始数据: %s", err, string(chunk))
-				continue // 改为 continue，不要 return
+				logger.Error(err)
+				return
 			}
 
 			finishReason, ok := obj["finishReason"]
 			if ok && finishReason == "stop" {
-				logger.Info("收到 stop 信号，准备结束")
 				break
 			}
-		}
-		
-		// 记录其他类型的数据
-		if !bytes.HasPrefix(chunk, []byte("a0:")) && !bytes.HasPrefix(chunk, []byte("ad:")) && len(chunk) > 0 {
-			logger.Debugf("收到未知类型数据: %s", string(chunk))
 		}
 
 		onceExec()
@@ -155,8 +135,7 @@ func waitResponse(ctx *gin.Context, r *http.Response, sse bool) (content string,
 		}
 
 		if raw == response.EOF {
-			logger.Info("收到 EOF 标记，但继续等待 stop 信号")
-			// 不要 break，继续等待 stop
+			break
 		}
 
 		if sse {
@@ -209,65 +188,4 @@ func mergeMessages(ctx *gin.Context, completion model.Completion) (newMessages s
 		newMessages = newMessages[:len(newMessages)-9]
 	}
 	return
-}
-
-func waitImageResponse(ctx *gin.Context, r *http.Response) (imageUrl string, err error) {
-	defer r.Body.Close()
-	reader := bufio.NewReader(r.Body)
-	var chunk []byte
-
-	logger.Info("等待图片生成响应...")
-	
-	for {
-		chunk, _, err = reader.ReadLine()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			logger.Error(err)
-			return
-		}
-
-		logger.Debug("----- raw chunk -----")
-		logger.Debug(string(chunk))
-		
-		// 查找包含图片URL的响应
-		if bytes.HasPrefix(chunk, []byte("a2:")) {
-			var raw string
-			err = json.Unmarshal(chunk[3:], &raw)
-			if err != nil {
-				logger.Error(err)
-				continue
-			}
-			
-			// 检查是否是图片URL
-			if strings.Contains(raw, "https://") && (strings.Contains(raw, ".png") || strings.Contains(raw, ".jpg") || strings.Contains(raw, ".jpeg") || strings.Contains(raw, ".webp")) {
-				imageUrl = raw
-				logger.Infof("找到图片URL: %s", imageUrl)
-			}
-		}
-
-		// 检查是否完成
-		if bytes.HasPrefix(chunk, []byte("ad:")) {
-			var obj map[string]interface{}
-			err = json.Unmarshal(chunk[3:], &obj)
-			if err != nil {
-				logger.Error(err)
-				continue
-			}
-
-			finishReason, ok := obj["finishReason"]
-			if ok && finishReason == "stop" {
-				logger.Info("图片生成完成")
-				break
-			}
-		}
-	}
-
-	if imageUrl == "" {
-		err = fmt.Errorf("未能获取到生成的图片URL")
-		logger.Error(err)
-	}
-	
-	return imageUrl, err
 }
