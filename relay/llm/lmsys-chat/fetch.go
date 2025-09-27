@@ -321,6 +321,13 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 
 // 重试已有会话
 func fetchRetry(ctx context.Context, cookie string, messages, modelId string, session *SessionCache) (response *http.Response, err error) {
+	// 特殊处理：如果是 claude-opus-4-20250514 的模型ID，改用 gemini-2.5-pro 的ID重试
+	actualModelId := modelId
+	if modelId == "ee116d12-64d6-48a8-88e5-b2d06325cdd2" {
+		actualModelId = "e2d9d353-6dbe-4414-bf87-bd289d523726" // 特殊处理 用这个特殊id重试
+		logger.Infof("特殊处理：将模型ID从 %s 替换为 %s 进行重试", modelId, actualModelId)
+	}
+	
 	// 构建重试请求
 	retryReq := map[string]interface{}{
 		"messages": []LmsysChatMessage{
@@ -337,7 +344,7 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 				FailureReason:           nil,
 			},
 		},
-		"modelId": modelId,
+		"modelId": actualModelId,
 	}
 	
 	// 调用重试接口
