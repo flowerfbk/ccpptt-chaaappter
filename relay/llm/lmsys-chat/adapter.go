@@ -6,7 +6,6 @@ import (
 	"chatgpt-adapter/core/gin/model"
 	"chatgpt-adapter/core/gin/response"
 	"chatgpt-adapter/core/logger"
-	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/iocgo/sdk/env"
 	"golang.org/x/exp/maps"
@@ -68,37 +67,15 @@ func (api *api) Models() (result []model.Model) {
 	customMap := api.env.GetStringMapString("lmsys-chat.model")
 	slice := maps.Keys(customMap)
 	modelSlice := maps.Keys(modelMap)
-	
-	// 使用 fmt.Printf 打印调试信息，确保输出到标准输出
-	fmt.Printf("\n=== lmsys-chat Models() 调试信息 ===\n")
-	fmt.Printf("代码中定义的模型数量: %d\n", len(modelSlice))
-	fmt.Printf("代码中定义的模型列表: %v\n", modelSlice)
-	fmt.Printf("配置文件中的自定义模型数量: %d\n", len(slice))
-	fmt.Printf("配置文件中的自定义模型列表: %v\n", slice)
-	
-	// 检查 gpt-5-chat 是否在 modelMap 中
-	if _, exists := modelMap["gpt-5-chat"]; exists {
-		fmt.Printf("✓ gpt-5-chat 存在于 modelMap 中\n")
-	} else {
-		fmt.Printf("✗ gpt-5-chat 不存在于 modelMap 中\n")
-	}
-	
-	allModels := append(slice, modelSlice...)
-	fmt.Printf("合并后的模型总数: %d\n", len(allModels))
-	fmt.Printf("合并后的完整模型列表: %v\n", allModels)
 
-	for _, mod := range allModels {
-		modelId := "lmsys-chat/" + mod
+	for _, mod := range append(slice, modelSlice...) {
 		result = append(result, model.Model{
-			Id:      modelId,
+			Id:      "lmsys-chat/" + mod,
 			Object:  "model",
 			Created: 1686935002,
 			By:      "lmsys-chat-adapter",
 		})
 	}
-	
-	fmt.Printf("最终返回的模型数量: %d\n", len(result))
-	fmt.Printf("=== lmsys-chat Models() 调试结束 ===\n\n")
 	return
 }
 
