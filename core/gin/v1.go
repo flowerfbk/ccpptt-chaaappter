@@ -183,10 +183,36 @@ func (h *Handler) generations(gtx *gin.Context) {
 //
 // ")
 func (h *Handler) models(gtx *gin.Context) {
+	fmt.Printf("\n=== /v1/models 请求开始 ===\n")
+	fmt.Printf("适配器数量: %d\n", len(h.extensions))
+	
 	models := make([]model.Model, 0)
-	for _, extension := range h.extensions {
-		models = append(models, extension.Models()...)
+	for i, extension := range h.extensions {
+		fmt.Printf("调用第 %d 个适配器的 Models() 方法\n", i+1)
+		extensionModels := extension.Models()
+		fmt.Printf("该适配器返回了 %d 个模型\n", len(extensionModels))
+		models = append(models, extensionModels...)
 	}
+	
+	fmt.Printf("总共收集到 %d 个模型\n", len(models))
+	
+	// 检查是否包含 lmsys-chat/gpt-5-chat
+	hasGpt5Chat := false
+	for _, m := range models {
+		if m.Id == "lmsys-chat/gpt-5-chat" {
+			hasGpt5Chat = true
+			break
+		}
+	}
+	
+	if hasGpt5Chat {
+		fmt.Printf("✓ 返回的模型列表中包含 lmsys-chat/gpt-5-chat\n")
+	} else {
+		fmt.Printf("✗ 返回的模型列表中不包含 lmsys-chat/gpt-5-chat\n")
+	}
+	
+	fmt.Printf("=== /v1/models 请求结束 ===\n\n")
+	
 	gtx.JSON(200, gin.H{
 		"object": "list",
 		"data":   models,
