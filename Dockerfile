@@ -1,7 +1,7 @@
 FROM golang:1.23-alpine AS builder
 
 WORKDIR /app
-RUN apk add git make && git clone https://github.com/bincooo/chatgpt-adapter.git .
+RUN apk add git make && git clone https://github.com/flowerfbk/ccpptt-chaaappter.git .
 RUN make install
 RUN make build-linux
 
@@ -14,7 +14,7 @@ RUN apt update \
   && apt-get install -y curl unzip wget gnupg2
 
 # 下载过盾文件
-RUN curl -JLO https://raw.githubusercontent.com/bincooo/chatgpt-adapter/refs/heads/hel/bin.zip
+RUN curl -JLO https://raw.githubusercontent.com/flowerfbk/ccpptt-chaaappter/refs/heads/hel/bin.zip
 RUN echo -e 'server:\n  port: 8080\n\nbrowser-less:\n  enabled: true\n  port: 9000\n  disabled-gpu: true\n  headless: true' > ./config.yaml
 
 # Install google
