@@ -136,7 +136,6 @@ func refreshCookie(ctx context.Context) (string, error) {
 		Context(ctx).
 		GET(baseUrl+"/v0/clearance").
 		Header("x-website", "https://lmarena.ai").
-		Header("x-mode", "anonymous"). // 使用匿名模式
 		DoC(emit.Status(http.StatusOK), emit.IsJSON)
 	if err != nil {
 		logger.Error("browser-less 获取 cookie 失败:", err)
