@@ -19,14 +19,12 @@ var (
 		"gemini-2.5-pro":                          "e2d9d353-6dbe-4414-bf87-bd289d523726",
 		"claude-opus-4-20250514":                  "ee116d12-64d6-48a8-88e5-b2d06325cdd2",
 		"claude-3-7-sonnet-20250219-thinking-32k": "be98fcfd-345c-4ae1-9a82-a19123ebf1d2",
-		
-		// 新增模型
 		"gpt-5-chat":                              "4b11c78c-08c8-461c-938e-5fc97d56a40d",
 		"gpt-5-high":                              "983bc566-b783-4d28-b24c-3c8b08eb1086",
 		"claude-opus-4-1-20250805":                "96ae95fd-b70d-49c3-91cc-b58c7da1090b",
 		"gpt-5-high-new-system-prompt":            "19ad5f04-38c6-48ae-b826-f7d5bbfd79f7",
 		"claude-opus-4-1-20250805-thinking-16k":   "f1a2eb6f-fc30-4806-9e00-1efd0d73cbc4",
-		"claude-opus-4-20250514-thinking-16k":     "3b5e9593-3dc0-4492-a3da-19784c4bde75",
+		"claude-opus-4-20250514-thinking-16k":     "3b5e9593-3dc0-4492-a3da-19784c4bde75"
 	}
 )
 
@@ -67,15 +65,31 @@ func (api *api) Models() (result []model.Model) {
 	customMap := api.env.GetStringMapString("lmsys-chat.model")
 	slice := maps.Keys(customMap)
 	modelSlice := maps.Keys(modelMap)
+	
+	// 打印调试信息
+	logger.Infof("=== lmsys-chat Models() 调试信息 ===")
+	logger.Infof("代码中定义的模型数量: %d", len(modelSlice))
+	logger.Infof("代码中定义的模型列表: %v", modelSlice)
+	logger.Infof("配置文件中的自定义模型数量: %d", len(slice))
+	logger.Infof("配置文件中的自定义模型列表: %v", slice)
+	
+	allModels := append(slice, modelSlice...)
+	logger.Infof("合并后的模型总数: %d", len(allModels))
+	logger.Infof("合并后的完整模型列表: %v", allModels)
 
-	for _, mod := range append(slice, modelSlice...) {
+	for _, mod := range allModels {
+		modelId := "lmsys-chat/" + mod
 		result = append(result, model.Model{
-			Id:      "lmsys-chat/" + mod,
+			Id:      modelId,
 			Object:  "model",
 			Created: 1686935002,
 			By:      "lmsys-chat-adapter",
 		})
+		logger.Debugf("添加模型到返回列表: %s", modelId)
 	}
+	
+	logger.Infof("最终返回的模型数量: %d", len(result))
+	logger.Infof("=== lmsys-chat Models() 调试结束 ===")
 	return
 }
 
