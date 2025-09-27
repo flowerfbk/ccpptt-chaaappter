@@ -234,8 +234,8 @@ func fetch(ctx context.Context, cookie string, messages, modelId string) (respon
 // 创建新会话
 func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey string) (response *http.Response, err error) {
 	// 生成各种ID
-	requestId := uuid.NewString()      // 请求ID
-	sessionId := uuid.NewString()      // 会话ID (evaluationSessionId)
+	// 重要：根据curl示例，id和evaluationSessionId应该是相同的！
+	sessionId := uuid.NewString()      // 会话ID (同时作为请求ID和evaluationSessionId)
 	messageId := uuid.NewString()      // 用户消息ID
 	modelMessageId := uuid.NewString() // 模型消息ID
 	
@@ -250,7 +250,7 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 	cacheMutex.Unlock()
 
 	req := LmsysChatRequest{
-		Id:              requestId,  // 使用独立的请求ID
+		Id:              sessionId,  // 使用sessionId作为请求ID（与curl示例一致）
 		Mode:            "direct",
 		ModelAId:        modelId,
 		UserMessageId:   messageId,
