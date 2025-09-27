@@ -370,6 +370,19 @@ func fetchRetry(ctx context.Context, cookie string, messages, modelId string, se
 				return fetchRetry(ctx, newCookie, messages, modelId, session)
 			}
 		}
+		// 如果遇到500错误，说明会话已失效，删除缓存并创建新会话
+		if errors.As(err, &busErr) && busErr.Code == 500 {
+			logger.Info("遇到500错误，会话已失效，删除缓存并创建新会话...")
+			
+			// 删除失效的缓存
+			cacheKey := getCacheKey(cookie, modelId)
+			cacheMutex.Lock()
+			delete(sessionCache, cacheKey)
+			cacheMutex.Unlock()
+			
+			// 创建新会话
+			return fetchCreate(ctx, cookie, messages, modelId, cacheKey)
+		}
 	}
 	
 	return
