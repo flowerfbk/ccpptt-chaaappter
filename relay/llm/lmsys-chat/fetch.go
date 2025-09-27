@@ -191,15 +191,12 @@ func refreshCookie(ctx context.Context) (string, error) {
 }
 
 func fetch(ctx context.Context, cookie string, messages, modelId string) (response *http.Response, err error) {
-	// 去除空格并检查是否为无效值
-	trimmedCookie := strings.TrimSpace(cookie)
-	
-	// 如果没有传入cookie，或者传入的是 EMPTY_KEY 或只有空格，自动获取
-	if trimmedCookie == "" || trimmedCookie == "EMPTY_KEY" {
+	// 如果没有传入cookie，或者传入的是 EMPTY_KEY 或空格，自动获取
+	if cookie == "" || cookie == "EMPTY_KEY" || cookie == " " || cookie == "  " || cookie == "   " {
 		if cookie == "EMPTY_KEY" {
 			logger.Info("检测到 EMPTY_KEY，按照未传入cookie处理...")
-		} else if trimmedCookie == "" && cookie != "" {
-			logger.Info("检测到只包含空格的cookie，按照未传入cookie处理...")
+		} else if cookie == " " || cookie == "  " || cookie == "   " {
+			logger.Info("检测到空格cookie，按照未传入cookie处理...")
 		} else {
 			logger.Info("没有传入cookie，尝试自动获取...")
 		}
@@ -208,8 +205,6 @@ func fetch(ctx context.Context, cookie string, messages, modelId string) (respon
 			return nil, err
 		}
 	} else {
-		// 使用去除空格后的cookie
-		cookie = trimmedCookie
 		// 打印传入的cookie前30个字符
 		if len(cookie) > 30 {
 			logger.Infof("使用传入的cookie: %s...", cookie[:30])
