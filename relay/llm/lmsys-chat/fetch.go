@@ -233,9 +233,11 @@ func fetch(ctx context.Context, cookie string, messages, modelId string) (respon
 
 // 创建新会话
 func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey string) (response *http.Response, err error) {
-	sessionId := uuid.NewString()
-	messageId := uuid.NewString()
-	modelMessageId := uuid.NewString()
+	// 生成各种ID
+	requestId := uuid.NewString()      // 请求ID
+	sessionId := uuid.NewString()      // 会话ID (evaluationSessionId)
+	messageId := uuid.NewString()      // 用户消息ID
+	modelMessageId := uuid.NewString() // 模型消息ID
 	
 	// 保存到缓存
 	cacheMutex.Lock()
@@ -248,7 +250,7 @@ func fetchCreate(ctx context.Context, cookie string, messages, modelId, cacheKey
 	cacheMutex.Unlock()
 
 	req := LmsysChatRequest{
-		Id:              uuid.NewString(),
+		Id:              requestId,  // 使用独立的请求ID
 		Mode:            "direct",
 		ModelAId:        modelId,
 		UserMessageId:   messageId,
